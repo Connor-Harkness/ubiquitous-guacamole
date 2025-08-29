@@ -42,6 +42,15 @@ class TriviaGame {
             categories: [] // Changed from 'category' to 'categories' array
         };
         
+        // Multiplayer properties
+        this.socket = null;
+        this.isMultiplayer = false;
+        this.isHost = false;
+        this.lobbyId = null;
+        this.players = [];
+        this.playerScores = new Map();
+        this.currentQuestion = null; // Store current question data for multiplayer
+        
         // Timer settings based on difficulty
         this.timerSettings = {
             easy: 15,
@@ -52,6 +61,7 @@ class TriviaGame {
         
         this.initializeGame();
         this.bindEvents();
+        this.initializeSocket();
     }
 
     initializeGame() {
@@ -80,9 +90,134 @@ class TriviaGame {
         });
     }
 
+    initializeSocket() {
+        this.socket = io();
+        
+        // Socket event handlers
+        this.socket.on('lobbyCreated', (data) => {
+            this.lobbyId = data.lobbyId;
+            this.isHost = data.isHost;
+            this.isMultiplayer = true;
+            document.getElementById('lobby-title').textContent = `Lobby: ${this.lobbyId}`;
+            this.updateLobbySettings();
+            this.showScreen('lobby-screen');
+            if (this.isHost) {
+                document.getElementById('start-multiplayer-game-btn').style.display = 'block';
+            }
+        });
+
+        this.socket.on('lobbyJoined', (data) => {
+            this.lobbyId = data.lobbyId;
+            this.isHost = data.isHost;
+            this.isMultiplayer = true;
+            this.players = data.players;
+            document.getElementById('lobby-title').textContent = `Lobby: ${this.lobbyId}`;
+            this.updateLobbySettings(data.settings);
+            this.updatePlayersList();
+            this.showScreen('lobby-screen');
+        });
+
+        this.socket.on('playerJoined', (data) => {
+            this.players = data.players;
+            this.updatePlayersList();
+        });
+
+        this.socket.on('playerLeft', (data) => {
+            this.players = data.players;
+            this.updatePlayersList();
+        });
+
+        this.socket.on('hostChanged', (data) => {
+            if (data.newHostId === this.socket.id) {
+                this.isHost = true;
+                document.getElementById('start-multiplayer-game-btn').style.display = 'block';
+            }
+        });
+
+        this.socket.on('gameStarted', (data) => {
+            this.currentQuestionIndex = data.questionIndex;
+            this.totalQuestions = data.totalQuestions;
+            this.isMultiplayer = true;
+            this.players = data.players;
+            this.currentQuestion = data.question; // Store current question data
+            this.initializePlayerScores();
+            this.showMultiplayerQuestion(data.question);
+            this.showScreen('multiplayer-quiz-screen');
+            if (this.isHost) {
+                document.getElementById('mp-host-actions').style.display = 'block';
+            }
+        });
+
+        this.socket.on('nextQuestion', (data) => {
+            this.currentQuestionIndex = data.questionIndex;
+            this.players = data.players; // Update player scores
+            this.currentQuestion = data.question; // Store current question data
+            this.showMultiplayerQuestion(data.question);
+        });
+
+        this.socket.on('playerAnswered', (data) => {
+            this.players = data.players; // Update scores from server
+            this.updatePlayerAnswerStatus(data.playerId, data.answerIndex, data.isCorrect);
+        });
+
+        this.socket.on('gameFinished', (data) => {
+            this.players = data.players;
+            this.teamScore = data.teamScore;
+            this.showMultiplayerResults();
+        });
+
+        this.socket.on('timerUpdate', (data) => {
+            this.updateMultiplayerTimer(data.timeLeft);
+        });
+
+        this.socket.on('questionTimeout', (data) => {
+            this.players = data.players;
+            this.handleMultiplayerTimeout();
+        });
+
+        this.socket.on('allPlayersAnswered', () => {
+            this.clearTimer();
+            if (this.isHost) {
+                document.getElementById('mp-next-btn').disabled = false;
+            }
+        });
+
+        this.socket.on('error', (message) => {
+            alert(message);
+        });
+    }
+
     bindEvents() {
         // Start screen events
-        document.getElementById('start-btn').addEventListener('click', () => this.startQuiz());
+        document.getElementById('single-player-btn').addEventListener('click', () => {
+            this.isMultiplayer = false;
+            this.showScreen('single-player-screen');
+        });
+        
+        document.getElementById('multiplayer-btn').addEventListener('click', () => {
+            this.showScreen('multiplayer-mode-screen');
+        });
+
+        // Single player screen events
+        document.getElementById('back-to-start-btn').addEventListener('click', () => this.showScreen('start-screen'));
+        document.getElementById('start-single-btn').addEventListener('click', () => this.startSinglePlayerQuiz());
+        
+        // Multiplayer mode screen events
+        document.getElementById('back-to-start-mp-btn').addEventListener('click', () => this.showScreen('start-screen'));
+        document.getElementById('create-lobby-btn').addEventListener('click', () => this.showScreen('create-lobby-screen'));
+        document.getElementById('join-lobby-btn').addEventListener('click', () => this.showScreen('join-lobby-screen'));
+
+        // Create lobby screen events
+        document.getElementById('back-to-mp-btn').addEventListener('click', () => this.showScreen('multiplayer-mode-screen'));
+        document.getElementById('create-lobby-confirm-btn').addEventListener('click', () => this.createLobby());
+
+        // Join lobby screen events
+        document.getElementById('back-to-mp-join-btn').addEventListener('click', () => this.showScreen('multiplayer-mode-screen'));
+        document.getElementById('join-lobby-confirm-btn').addEventListener('click', () => this.joinLobby());
+
+        // Lobby screen events
+        document.getElementById('leave-lobby-btn').addEventListener('click', () => this.leaveLobby());
+        document.getElementById('start-multiplayer-game-btn').addEventListener('click', () => this.startMultiplayerGame());
         
         // Category selection events
         document.getElementById('select-all-categories').addEventListener('change', (e) => {
@@ -91,13 +226,21 @@ class TriviaGame {
         
         // Quiz screen events
         document.getElementById('next-btn').addEventListener('click', () => this.nextQuestion());
+        document.getElementById('mp-next-btn').addEventListener('click', () => this.nextMultiplayerQuestion());
         
         // Results screen events
         document.getElementById('play-again-btn').addEventListener('click', () => this.playAgain());
         document.getElementById('new-session-btn').addEventListener('click', () => this.newSession());
+        document.getElementById('back-to-lobby-btn').addEventListener('click', () => this.backToLobby());
+        document.getElementById('new-game-btn').addEventListener('click', () => this.newGame());
         
         // Error screen events
         document.getElementById('retry-btn').addEventListener('click', () => this.initializeGame());
+
+        // Input formatting
+        document.getElementById('lobby-code-input').addEventListener('input', (e) => {
+            e.target.value = e.target.value.toUpperCase();
+        });
     }
 
     handleSelectAllCategories(selectAll) {
@@ -142,14 +285,19 @@ class TriviaGame {
     async startQuiz() {
         this.showScreen('loading-screen');
         
-        // Get settings from form
-        this.gameSettings.amount = document.getElementById('question-count').value;
-        this.gameSettings.difficulty = document.getElementById('difficulty').value;
+        // Get settings from form - check if single player or multiplayer mode
+            document.getElementById('sp-question-count');
+            document.getElementById('sp-difficulty');
+            
+        this.gameSettings.amount = questionCountElement.value;
+        this.gameSettings.difficulty = difficultyElement.value;
         
-        // Get selected categories
-        const selectedCategoryCheckboxes = document.querySelectorAll('#category-list input[type="checkbox"]:checked');
-        this.gameSettings.categories = Array.from(selectedCategoryCheckboxes).map(checkbox => parseInt(checkbox.value));
-        
+        // Get selected categories for single player mode
+        if (!this.isMultiplayer) {
+            const selectedCategoryCheckboxes = document.querySelectorAll('#category-list input[type="checkbox"]:checked');
+            this.gameSettings.categories = Array.from(selectedCategoryCheckboxes).map(checkbox => parseInt(checkbox.value));
+        }
+
         this.totalQuestions = parseInt(this.gameSettings.amount);
         
         // Update UI elements
@@ -162,6 +310,291 @@ class TriviaGame {
         } catch (error) {
             this.showError('Failed to load questions. Please check your internet connection and try again.');
         }
+    }
+
+    startSinglePlayerQuiz() {
+        this.isMultiplayer = false;
+        this.startQuiz();
+    }
+
+    createLobby() {
+        const settings = {
+            amount: parseInt(document.getElementById('mp-question-count').value),
+            difficulty: document.getElementById('mp-difficulty').value
+        };
+        
+        this.gameSettings = settings;
+        this.socket.emit('createLobby', settings);
+    }
+
+    joinLobby() {
+        const lobbyId = document.getElementById('lobby-code-input').value.trim();
+        const playerName = document.getElementById('player-name-input').value.trim() || 'Anonymous';
+        
+        if (!lobbyId) {
+            alert('Please enter a lobby code');
+            return;
+        }
+        
+        this.socket.emit('joinLobby', { lobbyId, playerName });
+    }
+
+    leaveLobby() {
+        this.socket.disconnect();
+        this.socket.connect();
+        this.isMultiplayer = false;
+        this.isHost = false;
+        this.lobbyId = null;
+        this.players = [];
+        this.showScreen('start-screen');
+    }
+
+    async startMultiplayerGame() {
+        if (!this.isHost) return;
+        
+        // Fetch questions for multiplayer game
+        this.totalQuestions = this.gameSettings.amount;
+        await this.fetchQuestions();
+        
+        // Start the game for all players
+        this.socket.emit('startGame', this.questions);
+    }
+
+    updateLobbySettings(settings = null) {
+        const gameSettings = settings || this.gameSettings;
+        document.getElementById('lobby-question-count').textContent = gameSettings.amount;
+        document.getElementById('lobby-difficulty').textContent = gameSettings.difficulty || 'Any';
+    }
+
+    updatePlayersList() {
+        const playerList = document.getElementById('player-list');
+        const playerCount = document.getElementById('player-count');
+        
+        playerList.innerHTML = '';
+        playerCount.textContent = this.players.length;
+        
+        this.players.forEach((player, index) => {
+            const playerDiv = document.createElement('div');
+            playerDiv.className = 'player-item';
+            playerDiv.innerHTML = `
+                <span class="player-name">${player.name}</span>
+                ${index === 0 ? '<span class="host-badge">Host</span>' : ''}
+            `;
+            playerList.appendChild(playerDiv);
+        });
+    }
+
+    initializePlayerScores() {
+        this.playerScores.clear();
+        this.players.forEach(player => {
+            this.playerScores.set(player.id, player.score || 0);
+        });
+    }
+
+    showMultiplayerQuestion(question) {
+        this.clearTimer();
+        
+        // Update question info
+        document.getElementById('mp-question-number').textContent = this.currentQuestionIndex + 1;
+        document.getElementById('mp-total-questions').textContent = this.totalQuestions;
+        document.getElementById('mp-category').textContent = question.category;
+        document.getElementById('mp-difficulty-tag').textContent = question.difficulty.toUpperCase();
+        
+        // Update progress
+        const progress = ((this.currentQuestionIndex + 1) / this.totalQuestions) * 100;
+        document.getElementById('mp-progress').style.width = `${progress}%`;
+        
+        // Show question and answers
+        document.getElementById('mp-question-text').textContent = question.question;
+        
+        const answersContainer = document.getElementById('mp-answers');
+        answersContainer.innerHTML = '';
+        
+        question.answers.forEach((answer, index) => {
+            const button = document.createElement('button');
+            button.className = 'answer-btn';
+            button.textContent = answer;
+            button.addEventListener('click', () => this.selectMultiplayerAnswer(index));
+            answersContainer.appendChild(button);
+        });
+        
+        // Reset state
+        this.selectedAnswerIndex = null;
+        if (this.isHost) {
+            document.getElementById('mp-next-btn').disabled = true;
+        }
+        
+        // Clear player answers display
+        document.getElementById('player-answers').innerHTML = '';
+        
+        // Timer will be managed by server
+        document.getElementById('mp-timer').textContent = '--';
+    }
+
+    selectMultiplayerAnswer(answerIndex) {
+        if (this.selectedAnswerIndex !== null) return; // Already answered
+        
+        this.selectedAnswerIndex = answerIndex;
+        
+        // Use currentQuestion instead of questions array for non-host clients
+        const question = this.currentQuestion;
+        if (!question) {
+            console.error('No current question data available');
+            return;
+        }
+        
+        const isCorrect = answerIndex === question.correctIndex;
+        
+        // Show answer feedback immediately for this player
+        const answerButtons = document.querySelectorAll('#mp-answers .answer-btn');
+        answerButtons.forEach((button, index) => {
+            button.style.pointerEvents = 'none';
+            
+            if (index === question.correctIndex) {
+                button.classList.add('correct');
+            } else if (index === answerIndex) {
+                button.classList.add('incorrect');
+            } else {
+                button.style.opacity = '0.5';
+            }
+        });
+        
+        // Send answer to server (server will handle score updates)
+        this.socket.emit('submitAnswer', { answerIndex, isCorrect });
+    }
+
+    updatePlayerAnswerStatus(playerId, answerIndex, isCorrect) {
+        const player = this.players.find(p => p.id === playerId);
+        if (!player) return;
+        
+        // Update local player scores from server data
+        this.playerScores.set(playerId, player.score || 0);
+        
+        // Update UI to show player answered
+        const playerAnswers = document.getElementById('player-answers');
+        const existingStatus = document.getElementById(`status-${playerId}`);
+        
+        if (!existingStatus) {
+            const statusDiv = document.createElement('div');
+            statusDiv.id = `status-${playerId}`;
+            statusDiv.className = `player-status ${isCorrect ? 'correct' : 'incorrect'}`;
+            statusDiv.textContent = `${player.name}: ${isCorrect ? '✓' : '✗'}`;
+            playerAnswers.appendChild(statusDiv);
+        }
+    }
+
+    updateMultiplayerTimer(timeLeft) {
+        const timerElement = document.getElementById('mp-timer');
+        if (!timerElement) return;
+        
+        timerElement.textContent = timeLeft;
+        
+        // Add visual warnings
+        timerElement.classList.remove('warning', 'danger');
+        
+        if (timeLeft <= 3) {
+            timerElement.classList.add('danger');
+        } else if (timeLeft <= 5) {
+            timerElement.classList.add('warning');
+        }
+    }
+
+    handleMultiplayerTimeout() {
+        if (this.selectedAnswerIndex !== null) return; // Already answered
+        
+        const question = this.currentQuestion;
+        if (!question) return;
+        
+        const answerButtons = document.querySelectorAll('#mp-answers .answer-btn');
+        
+        answerButtons.forEach((button, index) => {
+            button.style.pointerEvents = 'none';
+            
+            if (index === question.correctIndex) {
+                button.classList.add('correct');
+            } else {
+                button.style.opacity = '0.5';
+            }
+        });
+        
+        // Mark as timeout
+        this.selectedAnswerIndex = -1;
+        
+        // Update timer display
+        const timerElement = document.getElementById('mp-timer');
+        timerElement.textContent = 'Time\'s up!';
+        timerElement.classList.add('danger');
+        
+        // Enable next button for host if all players have answered/timed out
+        if (this.isHost) {
+            document.getElementById('mp-next-btn').disabled = false;
+        }
+    }
+
+    nextMultiplayerQuestion() {
+        if (!this.isHost) return;
+        this.socket.emit('nextQuestion');
+    }
+
+    showMultiplayerResults() {
+        const finalScores = document.getElementById('final-scores');
+        finalScores.innerHTML = '';
+        
+        // Sort players by score (using server data)
+        const sortedPlayers = [...this.players].sort((a, b) => {
+            const scoreA = a.score || 0;
+            const scoreB = b.score || 0;
+            return scoreB - scoreA;
+        });
+        
+        // Display team score at the top
+        const teamScore = this.teamScore || 0;
+        const teamPercentage = Math.round((teamScore / (this.totalQuestions * this.players.length)) * 100);
+        const teamDiv = document.createElement('div');
+        teamDiv.className = 'team-score';
+        teamDiv.innerHTML = `
+            <h3>🏆 Team Score</h3>
+            <div class="score-display">
+                <span class="team-total">${teamScore}</span>
+                <span class="team-possible">/ ${this.totalQuestions * this.players.length}</span>
+                <span class="team-percentage">(${teamPercentage}%)</span>
+            </div>
+        `;
+        finalScores.appendChild(teamDiv);
+        
+        // Add separator
+        const separator = document.createElement('hr');
+        separator.style.margin = '20px 0';
+        finalScores.appendChild(separator);
+        
+        // Display individual scores
+        const individualHeader = document.createElement('h3');
+        individualHeader.textContent = '👥 Individual Scores';
+        finalScores.appendChild(individualHeader);
+        
+        sortedPlayers.forEach((player, index) => {
+            const score = player.score || 0;
+            const percentage = Math.round((score / this.totalQuestions) * 100);
+            
+            const scoreDiv = document.createElement('div');
+            scoreDiv.className = `player-score ${index === 0 ? 'winner' : ''}`;
+            scoreDiv.innerHTML = `
+                <span class="rank">#${index + 1}</span>
+                <span class="player-name">${player.name}</span>
+                <span class="score">${score}/${this.totalQuestions} (${percentage}%)</span>
+            `;
+            finalScores.appendChild(scoreDiv);
+        });
+        
+        this.showScreen('multiplayer-results-screen');
+    }
+
+    backToLobby() {
+        this.showScreen('lobby-screen');
+    }
+
+    newGame() {
+        this.showScreen('start-screen');
     }
 
     async fetchQuestions() {
@@ -427,28 +860,28 @@ class TriviaGame {
         document.getElementById('next-btn').disabled = false;
     }
 
-    startTimer(difficulty) {
+    startTimer(difficulty, timerElementId = 'timer') {
         // Determine time limit based on difficulty
         this.timeLeft = this.timerSettings[difficulty] || this.timerSettings.default;
         
         // Update timer display
-        this.updateTimerDisplay();
+        this.updateTimerDisplay(timerElementId);
         
         // Start countdown
         this.timer = setInterval(() => {
             this.timeLeft--;
-            this.updateTimerDisplay();
+            this.updateTimerDisplay(timerElementId);
             
             if (this.timeLeft <= 0) {
-                this.handleTimeout();
+                this.handleTimeout(timerElementId);
             }
         }, 1000);
     }
     
-    updateTimerDisplay() {
-        const timerElement = document.getElementById('timer');
+    updateTimerDisplay(timerElementId = 'timer') {
+        const timerElement = document.getElementById(timerElementId);
         if (!timerElement) {
-            console.error('Timer element not found!');
+            console.error('Timer element not found!', timerElementId);
             return;
         }
         
@@ -464,34 +897,58 @@ class TriviaGame {
         }
     }
     
-    handleTimeout() {
+    handleTimeout(timerElementId = 'timer') {
         if (this.selectedAnswerIndex !== null) return; // Already answered
         
         this.clearTimer();
         
         // Treat timeout as incorrect answer
         const question = this.questions[this.currentQuestionIndex];
-        const answerButtons = document.querySelectorAll('.answer-btn');
         
-        // Show correct answer and disable all buttons
-        answerButtons.forEach((button, index) => {
-            button.style.pointerEvents = 'none';
+        if (this.isMultiplayer) {
+            // Handle multiplayer timeout
+            const answerButtons = document.querySelectorAll('#mp-answers .answer-btn');
             
-            if (index === question.correctIndex) {
-                button.classList.add('correct');
-            } else {
-                button.style.opacity = '0.5';
+            answerButtons.forEach((button, index) => {
+                button.style.pointerEvents = 'none';
+                
+                if (index === question.correctIndex) {
+                    button.classList.add('correct');
+                } else {
+                    button.style.opacity = '0.5';
+                }
+            });
+            
+            // Send timeout to server
+            this.socket.emit('submitAnswer', { answerIndex: -1, isCorrect: false });
+            
+            // Enable next button for host
+            if (this.isHost) {
+                document.getElementById('mp-next-btn').disabled = false;
             }
-        });
+        } else {
+            // Handle single player timeout
+            const answerButtons = document.querySelectorAll('#answers .answer-btn');
+            
+            answerButtons.forEach((button, index) => {
+                button.style.pointerEvents = 'none';
+                
+                if (index === question.correctIndex) {
+                    button.classList.add('correct');
+                } else {
+                    button.style.opacity = '0.5';
+                }
+            });
+            
+            // Enable next button
+            document.getElementById('next-btn').disabled = false;
+        }
         
         // Mark as timeout (no score increase)
         this.selectedAnswerIndex = -1; // Special value for timeout
         
-        // Enable next button
-        document.getElementById('next-btn').disabled = false;
-        
         // Update timer display to show timeout
-        const timerElement = document.getElementById('timer');
+        const timerElement = document.getElementById(timerElementId);
         timerElement.textContent = 'Time\'s up!';
         timerElement.classList.add('danger');
     }
@@ -502,10 +959,15 @@ class TriviaGame {
             this.timer = null;
         }
         
-        // Reset timer display styling
+        // Reset timer display styling for both timers
         const timerElement = document.getElementById('timer');
+        const mpTimerElement = document.getElementById('mp-timer');
+        
         if (timerElement) {
             timerElement.classList.remove('warning', 'danger');
+        }
+        if (mpTimerElement) {
+            mpTimerElement.classList.remove('warning', 'danger');
         }
     }
 

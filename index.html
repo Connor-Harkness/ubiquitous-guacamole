@@ -18,9 +18,21 @@
             <div class="card">
                 <h2>Welcome to Trivia!</h2>
                 <p>Challenge yourself with questions from various categories. Each session provides unique questions - no repeats!</p>
+                <div class="game-mode-selection">
+                    <button id="single-player-btn" class="btn btn-primary">Single Player</button>
+                    <button id="multiplayer-btn" class="btn btn-secondary">Multiplayer</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Single Player Setup Screen -->
+        <div id="single-player-screen" class="screen">
+            <div class="card">
+                <h2>Single Player Setup</h2>
+                <p>Challenge yourself with questions from various categories. Each session provides unique questions - no repeats!</p>
                 <div class="settings">
-                    <label for="question-count">Number of Questions:</label>
-                    <select id="question-count">
+                    <label for="sp-question-count">Number of Questions:</label>
+                    <select id="sp-question-count">
                         <option value="5">5 Questions</option>
                         <option value="10" selected>10 Questions</option>
                         <option value="15">15 Questions</option>
@@ -31,8 +43,8 @@
                         <option value="50">50 Questions</option>
                     </select>
                     
-                    <label for="difficulty">Difficulty:</label>
-                    <select id="difficulty">
+                    <label for="sp-difficulty">Difficulty:</label>
+                    <select id="sp-difficulty">
                         <option value="">Any Difficulty</option>
                         <option value="easy">Easy</option>
                         <option value="medium">Medium</option>
@@ -53,7 +65,99 @@
                         </div>
                     </div>
                 </div>
-                <button id="start-btn" class="btn btn-primary">Start Quiz</button>
+                <div class="screen-actions">
+                    <button id="back-to-start-btn" class="btn btn-secondary">Back</button>
+                    <button id="start-single-btn" class="btn btn-primary">Start Quiz</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Multiplayer Mode Selection Screen -->
+        <div id="multiplayer-mode-screen" class="screen">
+            <div class="card">
+                <h2>Multiplayer Mode</h2>
+                <p>Play with friends in real-time!</p>
+                <div class="multiplayer-options">
+                    <button id="create-lobby-btn" class="btn btn-primary">Create Lobby</button>
+                    <button id="join-lobby-btn" class="btn btn-secondary">Join Lobby</button>
+                </div>
+                <div class="screen-actions">
+                    <button id="back-to-start-mp-btn" class="btn btn-secondary">Back</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Create Lobby Screen -->
+        <div id="create-lobby-screen" class="screen">
+            <div class="card">
+                <h2>Create Lobby</h2>
+                <p>Set up your multiplayer game</p>
+                <div class="settings">
+                    <label for="mp-question-count">Number of Questions:</label>
+                    <select id="mp-question-count">
+                        <option value="5">5 Questions</option>
+                        <option value="10" selected>10 Questions</option>
+                        <option value="15">15 Questions</option>
+                        <option value="20">20 Questions</option>
+                        <option value="25">25 Questions</option>
+                        <option value="30">30 Questions</option>
+                        <option value="40">40 Questions</option>
+                        <option value="50">50 Questions</option>
+                    </select>
+                    
+                    <label for="mp-difficulty">Difficulty:</label>
+                    <select id="mp-difficulty">
+                        <option value="">Any Difficulty</option>
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+                <div class="screen-actions">
+                    <button id="back-to-mp-btn" class="btn btn-secondary">Back</button>
+                    <button id="create-lobby-confirm-btn" class="btn btn-primary">Create Lobby</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Join Lobby Screen -->
+        <div id="join-lobby-screen" class="screen">
+            <div class="card">
+                <h2>Join Lobby</h2>
+                <p>Enter lobby code to join a game</p>
+                <div class="join-lobby-form">
+                    <label for="lobby-code-input">Lobby Code:</label>
+                    <input type="text" id="lobby-code-input" placeholder="Enter lobby code" maxlength="6" style="text-transform: uppercase;">
+                    <label for="player-name-input">Your Name:</label>
+                    <input type="text" id="player-name-input" placeholder="Enter your name" maxlength="20">
+                </div>
+                <div class="screen-actions">
+                    <button id="back-to-mp-join-btn" class="btn btn-secondary">Back</button>
+                    <button id="join-lobby-confirm-btn" class="btn btn-primary">Join Lobby</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Lobby Waiting Room Screen -->
+        <div id="lobby-screen" class="screen">
+            <div class="card">
+                <h2 id="lobby-title">Lobby: XXXXXX</h2>
+                <div class="lobby-info">
+                    <div class="lobby-settings">
+                        <p><strong>Questions:</strong> <span id="lobby-question-count">10</span></p>
+                        <p><strong>Difficulty:</strong> <span id="lobby-difficulty">Any</span></p>
+                    </div>
+                    <div class="lobby-players">
+                        <h3>Players (<span id="player-count">0</span>)</h3>
+                        <div id="player-list" class="player-list">
+                            <!-- Players will be added here dynamically -->
+                        </div>
+                    </div>
+                </div>
+                <div class="screen-actions">
+                    <button id="leave-lobby-btn" class="btn btn-secondary">Leave Lobby</button>
+                    <button id="start-multiplayer-game-btn" class="btn btn-primary" style="display: none;">Start Game</button>
+                </div>
             </div>
         </div>
 
@@ -91,6 +195,36 @@
             </div>
         </div>
 
+        <!-- Multiplayer Quiz Screen -->
+        <div id="multiplayer-quiz-screen" class="screen">
+            <div class="progress-bar">
+                <div class="progress" id="mp-progress"></div>
+            </div>
+            <div class="question-info">
+                <span id="mp-question-number">1</span> of <span id="mp-total-questions">10</span>
+                <span id="mp-category" class="category-tag"></span>
+                <span id="mp-difficulty-tag" class="difficulty-tag"></span>
+                <div class="timer-container">
+                    <span class="timer-label">Time:</span>
+                    <span id="mp-timer" class="timer">15</span>s
+                </div>
+            </div>
+            <div class="card">
+                <h2 id="mp-question-text">Question will appear here</h2>
+                <div id="mp-answers" class="answers">
+                    <!-- Answer buttons will be inserted here -->
+                </div>
+                <div class="multiplayer-status">
+                    <div id="player-answers" class="player-answers">
+                        <!-- Player answer status will appear here -->
+                    </div>
+                </div>
+                <div class="quiz-actions" id="mp-host-actions" style="display: none;">
+                    <button id="mp-next-btn" class="btn btn-secondary" disabled>Next Question</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Results Screen -->
         <div id="results-screen" class="screen">
             <div class="card">
@@ -110,6 +244,23 @@
             </div>
         </div>
 
+        <!-- Multiplayer Results Screen -->
+        <div id="multiplayer-results-screen" class="screen">
+            <div class="card">
+                <h2>Game Complete!</h2>
+                <div class="multiplayer-results">
+                    <h3>Final Scores</h3>
+                    <div id="final-scores" class="score-list">
+                        <!-- Player scores will be displayed here -->
+                    </div>
+                </div>
+                <div class="results-actions">
+                    <button id="back-to-lobby-btn" class="btn btn-primary">Back to Lobby</button>
+                    <button id="new-game-btn" class="btn btn-secondary">New Game</button>
+                </div>
+            </div>
+        </div>
+
         <!-- Error Screen -->
         <div id="error-screen" class="screen">
             <div class="card">
@@ -120,6 +271,7 @@
         </div>
     </div>
 
+    <script src="/socket.io/socket.io.js"></script>
     <script src="script.js"></script>
 </body>
 </html>
