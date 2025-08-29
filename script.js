@@ -6,10 +6,20 @@ class TriviaGame {
         this.score = 0;
         this.totalQuestions = 10;
         this.selectedAnswerIndex = null;
+        this.timer = null;
+        this.timeLeft = 0;
         this.gameSettings = {
             amount: 10,
             difficulty: '',
             category: ''
+        };
+        
+        // Timer settings based on difficulty
+        this.timerSettings = {
+            easy: 15,
+            medium: 10,
+            hard: 5,
+            default: 15 // for mixed difficulty questions
         };
         
         this.initializeGame();
@@ -263,6 +273,9 @@ class TriviaGame {
     showQuestion() {
         const question = this.questions[this.currentQuestionIndex];
         
+        // Clear any existing timer
+        this.clearTimer();
+        
         // Update progress
         const progress = ((this.currentQuestionIndex + 1) / this.totalQuestions) * 100;
         document.getElementById('progress').style.width = `${progress}%`;
@@ -293,10 +306,16 @@ class TriviaGame {
         // Reset state
         this.selectedAnswerIndex = null;
         document.getElementById('next-btn').disabled = true;
+        
+        // Start timer
+        this.startTimer(question.difficulty);
     }
 
     selectAnswer(selectedIndex) {
         if (this.selectedAnswerIndex !== null) return; // Already answered
+        
+        // Clear timer when answer is selected
+        this.clearTimer();
         
         this.selectedAnswerIndex = selectedIndex;
         const question = this.questions[this.currentQuestionIndex];
@@ -324,7 +343,85 @@ class TriviaGame {
         document.getElementById('next-btn').disabled = false;
     }
 
+    startTimer(difficulty) {
+        // Determine time limit based on difficulty
+        this.timeLeft = this.timerSettings[difficulty] || this.timerSettings.default;
+        
+        // Update timer display
+        this.updateTimerDisplay();
+        
+        // Start countdown
+        this.timer = setInterval(() => {
+            this.timeLeft--;
+            this.updateTimerDisplay();
+            
+            if (this.timeLeft <= 0) {
+                this.handleTimeout();
+            }
+        }, 1000);
+    }
+    
+    updateTimerDisplay() {
+        const timerElement = document.getElementById('timer');
+        timerElement.textContent = this.timeLeft;
+        
+        // Add visual warnings
+        timerElement.classList.remove('warning', 'danger');
+        
+        if (this.timeLeft <= 3) {
+            timerElement.classList.add('danger');
+        } else if (this.timeLeft <= 5) {
+            timerElement.classList.add('warning');
+        }
+    }
+    
+    handleTimeout() {
+        if (this.selectedAnswerIndex !== null) return; // Already answered
+        
+        this.clearTimer();
+        
+        // Treat timeout as incorrect answer
+        const question = this.questions[this.currentQuestionIndex];
+        const answerButtons = document.querySelectorAll('.answer-btn');
+        
+        // Show correct answer and disable all buttons
+        answerButtons.forEach((button, index) => {
+            button.style.pointerEvents = 'none';
+            
+            if (index === question.correctIndex) {
+                button.classList.add('correct');
+            } else {
+                button.style.opacity = '0.5';
+            }
+        });
+        
+        // Mark as timeout (no score increase)
+        this.selectedAnswerIndex = -1; // Special value for timeout
+        
+        // Enable next button
+        document.getElementById('next-btn').disabled = false;
+        
+        // Update timer display to show timeout
+        const timerElement = document.getElementById('timer');
+        timerElement.textContent = 'Time\'s up!';
+        timerElement.classList.add('danger');
+    }
+    
+    clearTimer() {
+        if (this.timer) {
+            clearInterval(this.timer);
+            this.timer = null;
+        }
+        
+        // Reset timer display styling
+        const timerElement = document.getElementById('timer');
+        if (timerElement) {
+            timerElement.classList.remove('warning', 'danger');
+        }
+    }
+
     nextQuestion() {
+        this.clearTimer();
         this.currentQuestionIndex++;
         
         if (this.currentQuestionIndex < this.totalQuestions) {
@@ -372,6 +469,9 @@ class TriviaGame {
     }
 
     showScreen(screenId) {
+        // Clear timer when changing screens
+        this.clearTimer();
+        
         // Hide all screens
         document.querySelectorAll('.screen').forEach(screen => {
             screen.classList.remove('active');

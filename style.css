@@ -191,6 +191,37 @@ header h1 {
 .difficulty-tag.medium { background: #ffc107; color: #333; }
 .difficulty-tag.hard { background: #dc3545; }
 
+.timer-container {
+    display: flex;
+    align-items: center;
+    gap: 5px;
+    padding: 5px 12px;
+    background: rgba(255,255,255,0.2);
+    border-radius: 20px;
+    font-size: 0.9rem;
+}
+
+.timer {
+    font-weight: bold;
+    font-size: 1.1rem;
+}
+
+.timer.warning {
+    color: #ffc107;
+    animation: pulse 1s infinite;
+}
+
+.timer.danger {
+    color: #dc3545;
+    animation: pulse 0.5s infinite;
+}
+
+@keyframes pulse {
+    0% { opacity: 1; }
+    50% { opacity: 0.5; }
+    100% { opacity: 1; }
+}
+
 #question-text {
     font-size: 1.4rem;
     line-height: 1.5;
