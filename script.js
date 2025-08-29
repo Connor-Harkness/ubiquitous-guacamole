@@ -286,9 +286,7 @@ class TriviaGame {
         this.showScreen('loading-screen');
         
         // Get settings from form - check if single player or multiplayer mode
-        const questionCountElement = this.isMultiplayer ? 
-            document.getElementById('mp-question-count') : 
-            document.getElementById('question-count');
+            document.getElementById('sp-question-count');
         const difficultyElement = this.isMultiplayer ? 
             document.getElementById('mp-difficulty') : 
             document.getElementById('difficulty');
