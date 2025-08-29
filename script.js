@@ -88,6 +88,7 @@ class TriviaGame {
             this.currentQuestionIndex = data.questionIndex;
             this.totalQuestions = data.totalQuestions;
             this.isMultiplayer = true;
+            this.players = data.players;
             this.initializePlayerScores();
             this.showMultiplayerQuestion(data.question);
             this.showScreen('multiplayer-quiz-screen');
@@ -98,15 +99,35 @@ class TriviaGame {
 
         this.socket.on('nextQuestion', (data) => {
             this.currentQuestionIndex = data.questionIndex;
+            this.players = data.players; // Update player scores
             this.showMultiplayerQuestion(data.question);
         });
 
         this.socket.on('playerAnswered', (data) => {
+            this.players = data.players; // Update scores from server
             this.updatePlayerAnswerStatus(data.playerId, data.answerIndex, data.isCorrect);
         });
 
-        this.socket.on('gameFinished', () => {
+        this.socket.on('gameFinished', (data) => {
+            this.players = data.players;
+            this.teamScore = data.teamScore;
             this.showMultiplayerResults();
+        });
+
+        this.socket.on('timerUpdate', (data) => {
+            this.updateMultiplayerTimer(data.timeLeft);
+        });
+
+        this.socket.on('questionTimeout', (data) => {
+            this.players = data.players;
+            this.handleMultiplayerTimeout();
+        });
+
+        this.socket.on('allPlayersAnswered', () => {
+            this.clearTimer();
+            if (this.isHost) {
+                document.getElementById('mp-next-btn').disabled = false;
+            }
         });
 
         this.socket.on('error', (message) => {
@@ -299,7 +320,7 @@ class TriviaGame {
     initializePlayerScores() {
         this.playerScores.clear();
         this.players.forEach(player => {
-            this.playerScores.set(player.id, 0);
+            this.playerScores.set(player.id, player.score || 0);
         });
     }
 
@@ -339,26 +360,19 @@ class TriviaGame {
         // Clear player answers display
         document.getElementById('player-answers').innerHTML = '';
         
-        // Start timer
-        this.startTimer(question.difficulty, 'mp-timer');
+        // Timer will be managed by server
+        document.getElementById('mp-timer').textContent = '--';
     }
 
     selectMultiplayerAnswer(answerIndex) {
         if (this.selectedAnswerIndex !== null) return; // Already answered
         
-        this.clearTimer();
         this.selectedAnswerIndex = answerIndex;
         
         const question = this.questions[this.currentQuestionIndex];
         const isCorrect = answerIndex === question.correctIndex;
         
-        // Update local score if correct
-        if (isCorrect) {
-            const currentScore = this.playerScores.get(this.socket.id) || 0;
-            this.playerScores.set(this.socket.id, currentScore + 1);
-        }
-        
-        // Show answer feedback
+        // Show answer feedback immediately for this player
         const answerButtons = document.querySelectorAll('#mp-answers .answer-btn');
         answerButtons.forEach((button, index) => {
             button.style.pointerEvents = 'none';
@@ -372,24 +386,16 @@ class TriviaGame {
             }
         });
         
-        // Send answer to server
+        // Send answer to server (server will handle score updates)
         this.socket.emit('submitAnswer', { answerIndex, isCorrect });
-        
-        // Enable next button for host
-        if (this.isHost) {
-            document.getElementById('mp-next-btn').disabled = false;
-        }
     }
 
     updatePlayerAnswerStatus(playerId, answerIndex, isCorrect) {
         const player = this.players.find(p => p.id === playerId);
         if (!player) return;
         
-        // Update player score
-        if (isCorrect) {
-            const currentScore = this.playerScores.get(playerId) || 0;
-            this.playerScores.set(playerId, currentScore + 1);
-        }
+        // Update local player scores from server data
+        this.playerScores.set(playerId, player.score || 0);
         
         // Update UI to show player answered
         const playerAnswers = document.getElementById('player-answers');
@@ -404,6 +410,52 @@ class TriviaGame {
         }
     }
 
+    updateMultiplayerTimer(timeLeft) {
+        const timerElement = document.getElementById('mp-timer');
+        if (!timerElement) return;
+        
+        timerElement.textContent = timeLeft;
+        
+        // Add visual warnings
+        timerElement.classList.remove('warning', 'danger');
+        
+        if (timeLeft <= 3) {
+            timerElement.classList.add('danger');
+        } else if (timeLeft <= 5) {
+            timerElement.classList.add('warning');
+        }
+    }
+
+    handleMultiplayerTimeout() {
+        if (this.selectedAnswerIndex !== null) return; // Already answered
+        
+        const question = this.questions[this.currentQuestionIndex];
+        const answerButtons = document.querySelectorAll('#mp-answers .answer-btn');
+        
+        answerButtons.forEach((button, index) => {
+            button.style.pointerEvents = 'none';
+            
+            if (index === question.correctIndex) {
+                button.classList.add('correct');
+            } else {
+                button.style.opacity = '0.5';
+            }
+        });
+        
+        // Mark as timeout
+        this.selectedAnswerIndex = -1;
+        
+        // Update timer display
+        const timerElement = document.getElementById('mp-timer');
+        timerElement.textContent = 'Time\'s up!';
+        timerElement.classList.add('danger');
+        
+        // Enable next button for host if all players have answered/timed out
+        if (this.isHost) {
+            document.getElementById('mp-next-btn').disabled = false;
+        }
+    }
+
     nextMultiplayerQuestion() {
         if (!this.isHost) return;
         this.socket.emit('nextQuestion');
@@ -413,15 +465,40 @@ class TriviaGame {
         const finalScores = document.getElementById('final-scores');
         finalScores.innerHTML = '';
         
-        // Sort players by score
-        const sortedPlayers = this.players.sort((a, b) => {
-            const scoreA = this.playerScores.get(a.id) || 0;
-            const scoreB = this.playerScores.get(b.id) || 0;
+        // Sort players by score (using server data)
+        const sortedPlayers = [...this.players].sort((a, b) => {
+            const scoreA = a.score || 0;
+            const scoreB = b.score || 0;
             return scoreB - scoreA;
         });
         
+        // Display team score at the top
+        const teamScore = this.teamScore || 0;
+        const teamPercentage = Math.round((teamScore / (this.totalQuestions * this.players.length)) * 100);
+        const teamDiv = document.createElement('div');
+        teamDiv.className = 'team-score';
+        teamDiv.innerHTML = `
+            <h3>🏆 Team Score</h3>
+            <div class="score-display">
+                <span class="team-total">${teamScore}</span>
+                <span class="team-possible">/ ${this.totalQuestions * this.players.length}</span>
+                <span class="team-percentage">(${teamPercentage}%)</span>
+            </div>
+        `;
+        finalScores.appendChild(teamDiv);
+        
+        // Add separator
+        const separator = document.createElement('hr');
+        separator.style.margin = '20px 0';
+        finalScores.appendChild(separator);
+        
+        // Display individual scores
+        const individualHeader = document.createElement('h3');
+        individualHeader.textContent = '👥 Individual Scores';
+        finalScores.appendChild(individualHeader);
+        
         sortedPlayers.forEach((player, index) => {
-            const score = this.playerScores.get(player.id) || 0;
+            const score = player.score || 0;
             const percentage = Math.round((score / this.totalQuestions) * 100);
             
             const scoreDiv = document.createElement('div');

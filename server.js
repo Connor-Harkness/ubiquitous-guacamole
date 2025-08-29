@@ -39,12 +39,15 @@ io.on('connection', (socket) => {
         const lobby = {
             id: lobbyId,
             hostId: socket.id,
-            players: [{ id: socket.id, name: 'Host' }],
+            players: [{ id: socket.id, name: 'Host', score: 0 }],
             settings: settings,
             gameState: 'waiting', // waiting, playing, finished
             currentQuestion: null,
             currentQuestionIndex: 0,
-            questions: []
+            questions: [],
+            timer: null,
+            timeLeft: 0,
+            playerAnswers: new Map() // Track which players have answered current question
         };
         
         lobbies.set(lobbyId, lobby);
@@ -71,14 +74,14 @@ io.on('connection', (socket) => {
         }
         
         // Add player to lobby
-        lobby.players.push({ id: socket.id, name: playerName || `Player ${lobby.players.length + 1}` });
+        lobby.players.push({ id: socket.id, name: playerName || `Player ${lobby.players.length + 1}`, score: 0 });
         playerLobbies.set(socket.id, lobbyId);
         socket.join(lobbyId);
         
         // Notify all players in lobby
         io.to(lobbyId).emit('playerJoined', {
             players: lobby.players,
-            newPlayer: { id: socket.id, name: playerName || `Player ${lobby.players.length}` }
+            newPlayer: { id: socket.id, name: playerName || `Player ${lobby.players.length}`, score: 0 }
         });
         
         socket.emit('lobbyJoined', { lobbyId, isHost: false, players: lobby.players, settings: lobby.settings });
@@ -98,14 +101,22 @@ io.on('connection', (socket) => {
         lobby.gameState = 'playing';
         lobby.questions = questions;
         lobby.currentQuestionIndex = 0;
+        lobby.playerAnswers.clear();
+        
+        // Reset all player scores
+        lobby.players.forEach(player => {
+            player.score = 0;
+        });
         
         // Send first question to all players
         if (questions.length > 0) {
             lobby.currentQuestion = questions[0];
+            startQuestionTimer(lobby, lobbyId);
             io.to(lobbyId).emit('gameStarted', {
                 question: lobby.currentQuestion,
                 questionIndex: 0,
-                totalQuestions: questions.length
+                totalQuestions: questions.length,
+                players: lobby.players
             });
         }
         
@@ -121,12 +132,40 @@ io.on('connection', (socket) => {
             return;
         }
         
+        // Check if player already answered this question
+        if (lobby.playerAnswers.has(socket.id)) {
+            return;
+        }
+        
+        // Record the answer
+        lobby.playerAnswers.set(socket.id, {
+            answerIndex: data.answerIndex,
+            isCorrect: data.isCorrect,
+            timestamp: Date.now()
+        });
+        
+        // Update player score
+        if (data.isCorrect) {
+            const player = lobby.players.find(p => p.id === socket.id);
+            if (player) {
+                player.score++;
+            }
+        }
+        
         // Broadcast answer to all players in lobby
         io.to(lobbyId).emit('playerAnswered', {
             playerId: socket.id,
             answerIndex: data.answerIndex,
-            isCorrect: data.isCorrect
+            isCorrect: data.isCorrect,
+            players: lobby.players // Send updated scores
         });
+        
+        // Check if all players have answered
+        if (lobby.playerAnswers.size === lobby.players.length) {
+            // All players answered, stop timer and enable next question
+            stopQuestionTimer(lobby);
+            io.to(lobbyId).emit('allPlayersAnswered');
+        }
     });
 
     // Move to next question (host only)
@@ -138,18 +177,27 @@ io.on('connection', (socket) => {
             return;
         }
         
+        stopQuestionTimer(lobby);
         lobby.currentQuestionIndex++;
+        lobby.playerAnswers.clear(); // Reset for next question
         
         if (lobby.currentQuestionIndex < lobby.questions.length) {
             lobby.currentQuestion = lobby.questions[lobby.currentQuestionIndex];
+            startQuestionTimer(lobby, lobbyId);
             io.to(lobbyId).emit('nextQuestion', {
                 question: lobby.currentQuestion,
                 questionIndex: lobby.currentQuestionIndex,
-                totalQuestions: lobby.questions.length
+                totalQuestions: lobby.questions.length,
+                players: lobby.players
             });
         } else {
             lobby.gameState = 'finished';
-            io.to(lobbyId).emit('gameFinished');
+            const teamScore = lobby.players.reduce((total, player) => total + player.score, 0);
+            io.to(lobbyId).emit('gameFinished', {
+                players: lobby.players,
+                teamScore: teamScore,
+                totalQuestions: lobby.questions.length
+            });
         }
     });
 
@@ -161,6 +209,9 @@ io.on('connection', (socket) => {
         if (lobbyId) {
             const lobby = lobbies.get(lobbyId);
             if (lobby) {
+                // Stop any running timer
+                stopQuestionTimer(lobby);
+                
                 // Remove player from lobby
                 lobby.players = lobby.players.filter(p => p.id !== socket.id);
                 
@@ -191,6 +242,64 @@ io.on('connection', (socket) => {
 // Generate a random lobby ID
 function generateLobbyId() {
     return Math.random().toString(36).substring(2, 8).toUpperCase();
+}
+
+// Timer management functions
+function startQuestionTimer(lobby, lobbyId) {
+    // Stop any existing timer
+    stopQuestionTimer(lobby);
+    
+    // Set time based on difficulty
+    const difficulty = lobby.currentQuestion.difficulty;
+    const timerSettings = {
+        easy: 15,
+        medium: 10,
+        hard: 5,
+        default: 15
+    };
+    
+    lobby.timeLeft = timerSettings[difficulty] || timerSettings.default;
+    
+    // Broadcast initial timer state
+    io.to(lobbyId).emit('timerUpdate', { timeLeft: lobby.timeLeft });
+    
+    // Start countdown
+    lobby.timer = setInterval(() => {
+        lobby.timeLeft--;
+        io.to(lobbyId).emit('timerUpdate', { timeLeft: lobby.timeLeft });
+        
+        if (lobby.timeLeft <= 0) {
+            handleQuestionTimeout(lobby, lobbyId);
+        }
+    }, 1000);
+}
+
+function stopQuestionTimer(lobby) {
+    if (lobby.timer) {
+        clearInterval(lobby.timer);
+        lobby.timer = null;
+    }
+}
+
+function handleQuestionTimeout(lobby, lobbyId) {
+    stopQuestionTimer(lobby);
+    
+    // Mark unanswered players as having timed out
+    lobby.players.forEach(player => {
+        if (!lobby.playerAnswers.has(player.id)) {
+            lobby.playerAnswers.set(player.id, {
+                answerIndex: -1,
+                isCorrect: false,
+                timestamp: Date.now(),
+                timedOut: true
+            });
+        }
+    });
+    
+    // Broadcast timeout to all players
+    io.to(lobbyId).emit('questionTimeout', {
+        players: lobby.players
+    });
 }
 
 // Start server
