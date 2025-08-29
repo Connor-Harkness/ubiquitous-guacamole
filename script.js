@@ -21,6 +21,7 @@ class TriviaGame {
         this.lobbyId = null;
         this.players = [];
         this.playerScores = new Map();
+        this.currentQuestion = null; // Store current question data for multiplayer
         
         // Timer settings based on difficulty
         this.timerSettings = {
@@ -89,6 +90,7 @@ class TriviaGame {
             this.totalQuestions = data.totalQuestions;
             this.isMultiplayer = true;
             this.players = data.players;
+            this.currentQuestion = data.question; // Store current question data
             this.initializePlayerScores();
             this.showMultiplayerQuestion(data.question);
             this.showScreen('multiplayer-quiz-screen');
@@ -100,6 +102,7 @@ class TriviaGame {
         this.socket.on('nextQuestion', (data) => {
             this.currentQuestionIndex = data.questionIndex;
             this.players = data.players; // Update player scores
+            this.currentQuestion = data.question; // Store current question data
             this.showMultiplayerQuestion(data.question);
         });
 
@@ -369,7 +372,13 @@ class TriviaGame {
         
         this.selectedAnswerIndex = answerIndex;
         
-        const question = this.questions[this.currentQuestionIndex];
+        // Use currentQuestion instead of questions array for non-host clients
+        const question = this.currentQuestion;
+        if (!question) {
+            console.error('No current question data available');
+            return;
+        }
+        
         const isCorrect = answerIndex === question.correctIndex;
         
         // Show answer feedback immediately for this player
@@ -429,7 +438,9 @@ class TriviaGame {
     handleMultiplayerTimeout() {
         if (this.selectedAnswerIndex !== null) return; // Already answered
         
-        const question = this.questions[this.currentQuestionIndex];
+        const question = this.currentQuestion;
+        if (!question) return;
+        
         const answerButtons = document.querySelectorAll('#mp-answers .answer-btn');
         
         answerButtons.forEach((button, index) => {
