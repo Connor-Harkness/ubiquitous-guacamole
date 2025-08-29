@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Trivia Quiz Game</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🧠 Trivia Quiz Game</h1>
+            <p class="subtitle">Test your knowledge with questions from around the world!</p>
+        </header>
+
+        <!-- Start Screen -->
+        <div id="start-screen" class="screen active">
+            <div class="card">
+                <h2>Welcome to Trivia!</h2>
+                <p>Challenge yourself with questions from various categories. Each session provides unique questions - no repeats!</p>
+                <div class="settings">
+                    <label for="question-count">Number of Questions:</label>
+                    <select id="question-count">
+                        <option value="5">5 Questions</option>
+                        <option value="10" selected>10 Questions</option>
+                        <option value="15">15 Questions</option>
+                        <option value="20">20 Questions</option>
+                        <option value="25">25 Questions</option>
+                        <option value="30">30 Questions</option>
+                        <option value="40">40 Questions</option>
+                        <option value="50">50 Questions</option>
+                    </select>
+                    
+                    <label for="difficulty">Difficulty:</label>
+                    <select id="difficulty">
+                        <option value="">Any Difficulty</option>
+                        <option value="easy">Easy</option>
+                        <option value="medium">Medium</option>
+                        <option value="hard">Hard</option>
+                    </select>
+                </div>
+                <button id="start-btn" class="btn btn-primary">Start Quiz</button>
+            </div>
+        </div>
+
+        <!-- Loading Screen -->
+        <div id="loading-screen" class="screen">
+            <div class="card">
+                <div class="loading-spinner"></div>
+                <h2>Loading Questions...</h2>
+                <p>Preparing your unique quiz session</p>
+            </div>
+        </div>
+
+        <!-- Quiz Screen -->
+        <div id="quiz-screen" class="screen">
+            <div class="progress-bar">
+                <div class="progress" id="progress"></div>
+            </div>
+            <div class="question-info">
+                <span id="question-number">1</span> of <span id="total-questions">10</span>
+                <span id="category" class="category-tag"></span>
+                <span id="difficulty-tag" class="difficulty-tag"></span>
+                <div class="timer-container">
+                    <span class="timer-label">Time:</span>
+                    <span id="timer" class="timer">15</span>s
+                </div>
+            </div>
+            <div class="card">
+                <h2 id="question-text">Question will appear here</h2>
+                <div id="answers" class="answers">
+                    <!-- Answer buttons will be inserted here -->
+                </div>
+                <div class="quiz-actions">
+                    <button id="next-btn" class="btn btn-secondary" disabled>Next Question</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Results Screen -->
+        <div id="results-screen" class="screen">
+            <div class="card">
+                <h2>Quiz Complete!</h2>
+                <div class="score-display">
+                    <div class="score-circle">
+                        <span id="final-score">0</span>
+                        <span class="score-total">/ <span id="score-total">10</span></span>
+                    </div>
+                    <div class="score-percentage" id="score-percentage">0%</div>
+                </div>
+                <div class="score-message" id="score-message">Great job!</div>
+                <div class="results-actions">
+                    <button id="play-again-btn" class="btn btn-primary">Play Again</button>
+                    <button id="new-session-btn" class="btn btn-secondary">New Session</button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Error Screen -->
+        <div id="error-screen" class="screen">
+            <div class="card">
+                <h2>Oops! Something went wrong</h2>
+                <p id="error-message">Unable to load questions. Please try again.</p>
+                <button id="retry-btn" class="btn btn-primary">Try Again</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
