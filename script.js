@@ -1,3 +1,31 @@
+// Trivia categories from Open Trivia Database
+const TRIVIA_CATEGORIES = [
+    {"id": 9, "name": "General Knowledge"},
+    {"id": 10, "name": "Entertainment: Books"},
+    {"id": 11, "name": "Entertainment: Film"},
+    {"id": 12, "name": "Entertainment: Music"},
+    {"id": 13, "name": "Entertainment: Musicals & Theatres"},
+    {"id": 14, "name": "Entertainment: Television"},
+    {"id": 15, "name": "Entertainment: Video Games"},
+    {"id": 16, "name": "Entertainment: Board Games"},
+    {"id": 17, "name": "Science & Nature"},
+    {"id": 18, "name": "Science: Computers"},
+    {"id": 19, "name": "Science: Mathematics"},
+    {"id": 20, "name": "Mythology"},
+    {"id": 21, "name": "Sports"},
+    {"id": 22, "name": "Geography"},
+    {"id": 23, "name": "History"},
+    {"id": 24, "name": "Politics"},
+    {"id": 25, "name": "Art"},
+    {"id": 26, "name": "Celebrities"},
+    {"id": 27, "name": "Animals"},
+    {"id": 28, "name": "Vehicles"},
+    {"id": 29, "name": "Entertainment: Comics"},
+    {"id": 30, "name": "Science: Gadgets"},
+    {"id": 31, "name": "Entertainment: Japanese Anime & Manga"},
+    {"id": 32, "name": "Entertainment: Cartoon & Animations"}
+];
+
 class TriviaGame {
     constructor() {
         this.sessionToken = null;
@@ -11,7 +39,7 @@ class TriviaGame {
         this.gameSettings = {
             amount: 10,
             difficulty: '',
-            category: ''
+            categories: [] // Changed from 'category' to 'categories' array
         };
         
         // Multiplayer properties
@@ -38,7 +66,28 @@ class TriviaGame {
 
     initializeGame() {
         this.showScreen('start-screen');
+        this.populateCategories();
         this.requestSessionToken();
+    }
+
+    populateCategories() {
+        const categoryList = document.getElementById('category-list');
+        
+        // Clear existing categories
+        categoryList.innerHTML = '';
+        
+        // Populate categories
+        TRIVIA_CATEGORIES.forEach(category => {
+            const categoryItem = document.createElement('div');
+            categoryItem.className = 'category-item';
+            
+            categoryItem.innerHTML = `
+                <input type="checkbox" id="category-${category.id}" value="${category.id}">
+                <label for="category-${category.id}">${category.name}</label>
+            `;
+            
+            categoryList.appendChild(categoryItem);
+        });
     }
 
     initializeSocket() {
@@ -170,6 +219,11 @@ class TriviaGame {
         document.getElementById('leave-lobby-btn').addEventListener('click', () => this.leaveLobby());
         document.getElementById('start-multiplayer-game-btn').addEventListener('click', () => this.startMultiplayerGame());
         
+        // Category selection events
+        document.getElementById('select-all-categories').addEventListener('change', (e) => {
+            this.handleSelectAllCategories(e.target.checked);
+        });
+        
         // Quiz screen events
         document.getElementById('next-btn').addEventListener('click', () => this.nextQuestion());
         document.getElementById('mp-next-btn').addEventListener('click', () => this.nextMultiplayerQuestion());
@@ -186,6 +240,13 @@ class TriviaGame {
         // Input formatting
         document.getElementById('lobby-code-input').addEventListener('input', (e) => {
             e.target.value = e.target.value.toUpperCase();
+        });
+    }
+
+    handleSelectAllCategories(selectAll) {
+        const categoryCheckboxes = document.querySelectorAll('#category-list input[type="checkbox"]');
+        categoryCheckboxes.forEach(checkbox => {
+            checkbox.checked = selectAll;
         });
     }
 
@@ -227,13 +288,20 @@ class TriviaGame {
         // Get settings from form - check if single player or multiplayer mode
         const questionCountElement = this.isMultiplayer ? 
             document.getElementById('mp-question-count') : 
-            document.getElementById('sp-question-count');
+            document.getElementById('question-count');
         const difficultyElement = this.isMultiplayer ? 
             document.getElementById('mp-difficulty') : 
-            document.getElementById('sp-difficulty');
+            document.getElementById('difficulty');
             
         this.gameSettings.amount = questionCountElement.value;
         this.gameSettings.difficulty = difficultyElement.value;
+        
+        // Get selected categories for single player mode
+        if (!this.isMultiplayer) {
+            const selectedCategoryCheckboxes = document.querySelectorAll('#category-list input[type="checkbox"]:checked');
+            this.gameSettings.categories = Array.from(selectedCategoryCheckboxes).map(checkbox => parseInt(checkbox.value));
+        }
+
         this.totalQuestions = parseInt(this.gameSettings.amount);
         
         // Update UI elements
@@ -540,6 +608,16 @@ class TriviaGame {
             // Add optional parameters
             if (this.gameSettings.difficulty) {
                 apiUrl += `&difficulty=${this.gameSettings.difficulty}`;
+            }
+            
+            // Add category if categories are selected
+            if (this.gameSettings.categories && this.gameSettings.categories.length > 0) {
+                // If multiple categories selected, pick one randomly for this request
+                // This ensures variety while working within API limitations
+                const randomCategoryId = this.gameSettings.categories[
+                    Math.floor(Math.random() * this.gameSettings.categories.length)
+                ];
+                apiUrl += `&category=${randomCategoryId}`;
             }
             
             // Add session token if available

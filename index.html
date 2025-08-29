@@ -50,6 +50,20 @@
                         <option value="medium">Medium</option>
                         <option value="hard">Hard</option>
                     </select>
+                    
+                    <label for="categories">Categories:</label>
+                    <div class="category-selection">
+                        <div class="category-header">
+                            <label class="select-all-container">
+                                <input type="checkbox" id="select-all-categories">
+                                <span class="checkmark"></span>
+                                Select All Categories
+                            </label>
+                        </div>
+                        <div id="category-list" class="category-list">
+                            <!-- Category checkboxes will be populated by JavaScript -->
+                        </div>
+                    </div>
                 </div>
                 <div class="screen-actions">
                     <button id="back-to-start-btn" class="btn btn-secondary">Back</button>
