@@ -225,6 +225,14 @@ class TriviaGame {
                 category: "Science",
                 difficulty: "medium",
                 type: "multiple"
+            },
+            {
+                question: "What is the derivative of x² with respect to x?",
+                answers: ["x", "2x", "x²", "2"],
+                correctIndex: 1,
+                category: "Mathematics", 
+                difficulty: "hard",
+                type: "multiple"
             }
         ];
 
@@ -266,8 +274,8 @@ class TriviaGame {
     startQuizGame() {
         this.currentQuestionIndex = 0;
         this.score = 0;
-        this.showQuestion();
         this.showScreen('quiz-screen');
+        this.showQuestion();
     }
 
     showQuestion() {
@@ -363,6 +371,11 @@ class TriviaGame {
     
     updateTimerDisplay() {
         const timerElement = document.getElementById('timer');
+        if (!timerElement) {
+            console.error('Timer element not found!');
+            return;
+        }
+        
         timerElement.textContent = this.timeLeft;
         
         // Add visual warnings
@@ -489,7 +502,7 @@ class TriviaGame {
 
 // Initialize the game when the page loads
 document.addEventListener('DOMContentLoaded', () => {
-    new TriviaGame();
+    window.triviaGame = new TriviaGame(); // Make globally available for debugging
 });
 
 // Service worker registration for potential future PWA features
