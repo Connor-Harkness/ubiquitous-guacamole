@@ -329,8 +329,8 @@ class TriviaGame {
         this.showScreen('loading-screen');
         
         // Get settings from form - check if single player or multiplayer mode
-            document.getElementById('sp-question-count');
-            document.getElementById('sp-difficulty');
+        const questionCountElement = document.getElementById('sp-question-count');
+        const difficultyElement = document.getElementById('sp-difficulty');
             
         this.gameSettings.amount = questionCountElement.value;
         this.gameSettings.difficulty = difficultyElement.value;
