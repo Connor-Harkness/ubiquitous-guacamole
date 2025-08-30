@@ -34,12 +34,13 @@ io.on('connection', (socket) => {
     console.log('User connected:', socket.id);
 
     // Create a new lobby
-    socket.on('createLobby', (settings) => {
+    socket.on('createLobby', (data) => {
+        const { settings, hostName } = data;
         const lobbyId = generateLobbyId();
         const lobby = {
             id: lobbyId,
             hostId: socket.id,
-            players: [{ id: socket.id, name: 'Host', score: 0 }],
+            players: [{ id: socket.id, name: hostName || 'Host', score: 0 }],
             settings: settings,
             gameState: 'waiting', // waiting, playing, finished
             currentQuestion: null,
@@ -54,7 +55,7 @@ io.on('connection', (socket) => {
         playerLobbies.set(socket.id, lobbyId);
         socket.join(lobbyId);
         
-        socket.emit('lobbyCreated', { lobbyId, isHost: true });
+        socket.emit('lobbyCreated', { lobbyId, isHost: true, players: lobby.players, settings: lobby.settings });
         console.log(`Lobby ${lobbyId} created by ${socket.id}`);
     });
 
@@ -199,6 +200,61 @@ io.on('connection', (socket) => {
                 totalQuestions: lobby.questions.length
             });
         }
+    });
+
+    // Kick a player from lobby (host only)
+    socket.on('kickPlayer', (data) => {
+        const { playerId } = data;
+        const lobbyId = playerLobbies.get(socket.id);
+        
+        if (!lobbyId) {
+            socket.emit('error', 'You are not in a lobby');
+            return;
+        }
+        
+        const lobby = lobbies.get(lobbyId);
+        if (!lobby) {
+            socket.emit('error', 'Lobby not found');
+            return;
+        }
+        
+        // Check if the requester is the host
+        if (lobby.hostId !== socket.id) {
+            socket.emit('error', 'Only the host can kick players');
+            return;
+        }
+        
+        // Check if trying to kick themselves
+        if (playerId === socket.id) {
+            socket.emit('error', 'Cannot kick yourself');
+            return;
+        }
+        
+        // Find and remove the player
+        const playerIndex = lobby.players.findIndex(p => p.id === playerId);
+        if (playerIndex === -1) {
+            socket.emit('error', 'Player not found');
+            return;
+        }
+        
+        // Remove player from lobby
+        lobby.players.splice(playerIndex, 1);
+        playerLobbies.delete(playerId);
+        
+        // Disconnect the kicked player from the lobby room
+        const kickedSocket = io.sockets.sockets.get(playerId);
+        if (kickedSocket) {
+            kickedSocket.leave(lobbyId);
+            kickedSocket.emit('kicked', { message: 'You have been kicked from the lobby' });
+        }
+        
+        // Notify all remaining players
+        io.to(lobbyId).emit('playerLeft', {
+            playerId: playerId,
+            players: lobby.players
+        });
+        
+        console.log(`Player ${playerId} was kicked from lobby ${lobbyId} by host ${socket.id}`);
     });
 
     // Handle disconnection

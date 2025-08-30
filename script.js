@@ -95,11 +95,14 @@ class TriviaGame {
         
         // Socket event handlers
         this.socket.on('lobbyCreated', (data) => {
+            console.log('lobbyCreated event received:', data);
             this.lobbyId = data.lobbyId;
             this.isHost = data.isHost;
             this.isMultiplayer = true;
+            this.players = data.players;
             document.getElementById('lobby-title').textContent = `Lobby: ${this.lobbyId}`;
-            this.updateLobbySettings();
+            this.updateLobbySettings(data.settings);
+            this.updatePlayersList();
             this.showScreen('lobby-screen');
             if (this.isHost) {
                 document.getElementById('start-multiplayer-game-btn').style.display = 'block';
@@ -125,6 +128,11 @@ class TriviaGame {
         this.socket.on('playerLeft', (data) => {
             this.players = data.players;
             this.updatePlayersList();
+        });
+
+        this.socket.on('kicked', (data) => {
+            alert(data.message || 'You have been kicked from the lobby');
+            this.leaveLobby();
         });
 
         this.socket.on('hostChanged', (data) => {
@@ -318,13 +326,14 @@ class TriviaGame {
     }
 
     createLobby() {
+        const hostName = document.getElementById('host-name-input').value.trim() || 'Host';
         const settings = {
             amount: parseInt(document.getElementById('mp-question-count').value),
             difficulty: document.getElementById('mp-difficulty').value
         };
         
         this.gameSettings = settings;
-        this.socket.emit('createLobby', settings);
+        this.socket.emit('createLobby', { settings, hostName });
     }
 
     joinLobby() {
@@ -349,6 +358,19 @@ class TriviaGame {
         this.showScreen('start-screen');
     }
 
+    kickPlayer(playerId) {
+        if (!this.isHost) return;
+        
+        // Find the player to kick
+        const playerToKick = this.players.find(p => p.id === playerId);
+        if (!playerToKick) return;
+        
+        // Confirm the kick action
+        if (confirm(`Are you sure you want to kick ${playerToKick.name}?`)) {
+            this.socket.emit('kickPlayer', { playerId });
+        }
+    }
+
     async startMultiplayerGame() {
         if (!this.isHost) return;
         
@@ -370,15 +392,29 @@ class TriviaGame {
         const playerList = document.getElementById('player-list');
         const playerCount = document.getElementById('player-count');
         
+        // Defensive check
+        if (!this.players) {
+            this.players = [];
+        }
+        
         playerList.innerHTML = '';
         playerCount.textContent = this.players.length;
         
         this.players.forEach((player, index) => {
             const playerDiv = document.createElement('div');
             playerDiv.className = 'player-item';
+            
+            // Show host badge for the first player (host)
+            const hostBadge = index === 0 ? '<span class="host-badge">Host</span>' : '';
+            
+            // Show kick button for non-host players, but only if current user is host
+            const kickButton = (index !== 0 && this.isHost) ? 
+                `<button class="kick-btn" onclick="window.triviaGame.kickPlayer('${player.id}')" title="Kick Player">×</button>` : '';
+            
             playerDiv.innerHTML = `
                 <span class="player-name">${player.name}</span>
-                ${index === 0 ? '<span class="host-badge">Host</span>' : ''}
+                ${hostBadge}
+                ${kickButton}
             `;
             playerList.appendChild(playerDiv);
         });
