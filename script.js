@@ -210,6 +210,10 @@ class TriviaGame {
             }
         });
 
+        this.socket.on('autoAdvanceUpdate', (data) => {
+            this.updateAutoAdvanceDisplay(data.timeLeft);
+        });
+
         this.socket.on('error', (message) => {
             alert(message);
         });
@@ -487,6 +491,7 @@ class TriviaGame {
 
     showMultiplayerQuestion(question) {
         this.clearTimer();
+        this.clearAutoAdvanceDisplay();
         
         // Update question info
         document.getElementById('mp-question-number').textContent = this.currentQuestionIndex + 1;
@@ -590,6 +595,41 @@ class TriviaGame {
             timerElement.classList.add('danger');
         } else if (timeLeft <= 5) {
             timerElement.classList.add('warning');
+        }
+    }
+
+    updateAutoAdvanceDisplay(timeLeft) {
+        // Find or create auto-advance display element
+        let autoAdvanceElement = document.getElementById('mp-auto-advance');
+        if (!autoAdvanceElement) {
+            // Create the auto-advance display element if it doesn't exist
+            autoAdvanceElement = document.createElement('div');
+            autoAdvanceElement.id = 'mp-auto-advance';
+            autoAdvanceElement.className = 'auto-advance-display';
+            
+            // Insert it after the multiplayer status section
+            const statusSection = document.querySelector('.multiplayer-status');
+            if (statusSection) {
+                statusSection.parentNode.insertBefore(autoAdvanceElement, statusSection.nextSibling);
+            }
+        }
+        
+        autoAdvanceElement.textContent = `Next question in ${timeLeft} seconds...`;
+        autoAdvanceElement.style.display = 'block';
+        
+        // Add visual styling based on time left
+        autoAdvanceElement.classList.remove('warning', 'danger');
+        if (timeLeft <= 2) {
+            autoAdvanceElement.classList.add('danger');
+        } else if (timeLeft <= 3) {
+            autoAdvanceElement.classList.add('warning');
+        }
+    }
+
+    clearAutoAdvanceDisplay() {
+        const autoAdvanceElement = document.getElementById('mp-auto-advance');
+        if (autoAdvanceElement) {
+            autoAdvanceElement.style.display = 'none';
         }
     }
 

@@ -285,6 +285,32 @@ input[type="checkbox"] {
     100% { opacity: 1; }
 }
 
+.auto-advance-display {
+    text-align: center;
+    padding: 10px 15px;
+    margin: 10px 0;
+    border-radius: 20px;
+    background: rgba(74, 144, 226, 0.1);
+    border: 2px solid #4a90e2;
+    color: #4a90e2;
+    font-weight: bold;
+    font-size: 0.9rem;
+    display: none;
+}
+
+.auto-advance-display.warning {
+    background: rgba(255, 193, 7, 0.1);
+    border-color: #ffc107;
+    color: #ffc107;
+}
+
+.auto-advance-display.danger {
+    background: rgba(220, 53, 69, 0.1);
+    border-color: #dc3545;
+    color: #dc3545;
+    animation: pulse 0.5s infinite;
+}
+
 #question-text {
     font-size: 1.4rem;
     line-height: 1.5;
