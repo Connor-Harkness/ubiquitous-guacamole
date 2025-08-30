@@ -71,6 +71,7 @@ class TriviaGame {
     }
 
     populateCategories() {
+        // Populate single-player categories
         const categoryList = document.getElementById('category-list');
         
         // Clear existing categories
@@ -87,6 +88,25 @@ class TriviaGame {
             `;
             
             categoryList.appendChild(categoryItem);
+        });
+
+        // Populate multiplayer categories
+        const mpCategoryList = document.getElementById('mp-category-list');
+        
+        // Clear existing categories
+        mpCategoryList.innerHTML = '';
+        
+        // Populate categories
+        TRIVIA_CATEGORIES.forEach(category => {
+            const categoryItem = document.createElement('div');
+            categoryItem.className = 'category-item';
+            
+            categoryItem.innerHTML = `
+                <input type="checkbox" id="mp-category-${category.id}" value="${category.id}">
+                <label for="mp-category-${category.id}">${category.name}</label>
+            `;
+            
+            mpCategoryList.appendChild(categoryItem);
         });
     }
 
@@ -232,6 +252,10 @@ class TriviaGame {
             this.handleSelectAllCategories(e.target.checked);
         });
         
+        document.getElementById('mp-select-all-categories').addEventListener('change', (e) => {
+            this.handleMultiplayerSelectAllCategories(e.target.checked);
+        });
+        
         // Quiz screen events
         document.getElementById('next-btn').addEventListener('click', () => this.nextQuestion());
         document.getElementById('mp-next-btn').addEventListener('click', () => this.nextMultiplayerQuestion());
@@ -253,6 +277,13 @@ class TriviaGame {
 
     handleSelectAllCategories(selectAll) {
         const categoryCheckboxes = document.querySelectorAll('#category-list input[type="checkbox"]');
+        categoryCheckboxes.forEach(checkbox => {
+            checkbox.checked = selectAll;
+        });
+    }
+
+    handleMultiplayerSelectAllCategories(selectAll) {
+        const categoryCheckboxes = document.querySelectorAll('#mp-category-list input[type="checkbox"]');
         categoryCheckboxes.forEach(checkbox => {
             checkbox.checked = selectAll;
         });
@@ -327,9 +358,15 @@ class TriviaGame {
 
     createLobby() {
         const hostName = document.getElementById('host-name-input').value.trim() || 'Host';
+        
+        // Get selected categories from multiplayer category list
+        const selectedCategoryCheckboxes = document.querySelectorAll('#mp-category-list input[type="checkbox"]:checked');
+        const selectedCategories = Array.from(selectedCategoryCheckboxes).map(checkbox => parseInt(checkbox.value));
+        
         const settings = {
             amount: parseInt(document.getElementById('mp-question-count').value),
-            difficulty: document.getElementById('mp-difficulty').value
+            difficulty: document.getElementById('mp-difficulty').value,
+            categories: selectedCategories
         };
         
         this.gameSettings = settings;
@@ -386,6 +423,27 @@ class TriviaGame {
         const gameSettings = settings || this.gameSettings;
         document.getElementById('lobby-question-count').textContent = gameSettings.amount;
         document.getElementById('lobby-difficulty').textContent = gameSettings.difficulty || 'Any';
+        
+        // Display selected categories
+        const categoriesElement = document.getElementById('lobby-categories');
+        if (gameSettings.categories && gameSettings.categories.length > 0) {
+            // Get category names from the selected IDs
+            const selectedCategoryNames = gameSettings.categories.map(categoryId => {
+                const category = TRIVIA_CATEGORIES.find(cat => cat.id === categoryId);
+                return category ? category.name : `Category ${categoryId}`;
+            });
+            
+            // Display categories, showing max 3 then "and X more"
+            if (selectedCategoryNames.length <= 3) {
+                categoriesElement.textContent = selectedCategoryNames.join(', ');
+            } else {
+                const firstThree = selectedCategoryNames.slice(0, 3).join(', ');
+                const remaining = selectedCategoryNames.length - 3;
+                categoriesElement.textContent = `${firstThree} and ${remaining} more`;
+            }
+        } else {
+            categoriesElement.textContent = 'All';
+        }
     }
 
     updatePlayersList() {

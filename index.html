@@ -115,6 +115,20 @@
                         <option value="medium">Medium</option>
                         <option value="hard">Hard</option>
                     </select>
+                    
+                    <label for="mp-categories">Categories:</label>
+                    <div class="category-selection">
+                        <div class="category-header">
+                            <label class="select-all-container">
+                                <input type="checkbox" id="mp-select-all-categories">
+                                <span class="checkmark"></span>
+                                Select All Categories
+                            </label>
+                        </div>
+                        <div id="mp-category-list" class="category-list">
+                            <!-- Category checkboxes will be populated by JavaScript -->
+                        </div>
+                    </div>
                 </div>
                 <div class="screen-actions">
                     <button id="back-to-mp-btn" class="btn btn-secondary">Back</button>
@@ -149,6 +163,7 @@
                     <div class="lobby-settings">
                         <p><strong>Questions:</strong> <span id="lobby-question-count">10</span></p>
                         <p><strong>Difficulty:</strong> <span id="lobby-difficulty">Any</span></p>
+                        <p><strong>Categories:</strong> <span id="lobby-categories">All</span></p>
                     </div>
                     <div class="lobby-players">
                         <h3>Players (<span id="player-count">0</span>)</h3>
