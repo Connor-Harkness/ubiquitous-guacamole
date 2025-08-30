@@ -163,9 +163,10 @@ io.on('connection', (socket) => {
         
         // Check if all players have answered
         if (lobby.playerAnswers.size === lobby.players.length) {
-            // All players answered, stop timer and enable next question
+            // All players answered, stop timer and start auto-advance
             stopQuestionTimer(lobby);
             io.to(lobbyId).emit('allPlayersAnswered');
+            startAutoAdvanceTimer(lobby, lobbyId);
         }
     });
 
@@ -179,6 +180,7 @@ io.on('connection', (socket) => {
         }
         
         stopQuestionTimer(lobby);
+        stopAutoAdvanceTimer(lobby); // Stop auto-advance if host advances manually
         lobby.currentQuestionIndex++;
         lobby.playerAnswers.clear(); // Reset for next question
         
@@ -265,8 +267,9 @@ io.on('connection', (socket) => {
         if (lobbyId) {
             const lobby = lobbies.get(lobbyId);
             if (lobby) {
-                // Stop any running timer
+                // Stop any running timers
                 stopQuestionTimer(lobby);
+                stopAutoAdvanceTimer(lobby);
                 
                 // Remove player from lobby
                 lobby.players = lobby.players.filter(p => p.id !== socket.id);
@@ -337,6 +340,62 @@ function stopQuestionTimer(lobby) {
     }
 }
 
+function startAutoAdvanceTimer(lobby, lobbyId) {
+    // Stop any existing auto-advance timer
+    stopAutoAdvanceTimer(lobby);
+    
+    // Set 5-second countdown for auto-advance
+    lobby.autoAdvanceTimeLeft = 5;
+    
+    // Broadcast initial countdown state
+    io.to(lobbyId).emit('autoAdvanceUpdate', { timeLeft: lobby.autoAdvanceTimeLeft });
+    
+    // Start countdown
+    lobby.autoAdvanceTimer = setInterval(() => {
+        lobby.autoAdvanceTimeLeft--;
+        io.to(lobbyId).emit('autoAdvanceUpdate', { timeLeft: lobby.autoAdvanceTimeLeft });
+        
+        if (lobby.autoAdvanceTimeLeft <= 0) {
+            // Auto-advance to next question
+            handleAutoAdvance(lobby, lobbyId);
+        }
+    }, 1000);
+}
+
+function stopAutoAdvanceTimer(lobby) {
+    if (lobby.autoAdvanceTimer) {
+        clearInterval(lobby.autoAdvanceTimer);
+        lobby.autoAdvanceTimer = null;
+    }
+}
+
+function handleAutoAdvance(lobby, lobbyId) {
+    stopAutoAdvanceTimer(lobby);
+    
+    // Advance to next question (same logic as manual nextQuestion)
+    lobby.currentQuestionIndex++;
+    lobby.playerAnswers.clear(); // Reset for next question
+    
+    if (lobby.currentQuestionIndex < lobby.questions.length) {
+        lobby.currentQuestion = lobby.questions[lobby.currentQuestionIndex];
+        startQuestionTimer(lobby, lobbyId);
+        io.to(lobbyId).emit('nextQuestion', {
+            question: lobby.currentQuestion,
+            questionIndex: lobby.currentQuestionIndex,
+            totalQuestions: lobby.questions.length,
+            players: lobby.players
+        });
+    } else {
+        lobby.gameState = 'finished';
+        const teamScore = lobby.players.reduce((total, player) => total + player.score, 0);
+        io.to(lobbyId).emit('gameFinished', {
+            players: lobby.players,
+            teamScore: teamScore,
+            totalQuestions: lobby.questions.length
+        });
+    }
+}
+
 function handleQuestionTimeout(lobby, lobbyId) {
     stopQuestionTimer(lobby);
     
@@ -356,6 +415,9 @@ function handleQuestionTimeout(lobby, lobbyId) {
     io.to(lobbyId).emit('questionTimeout', {
         players: lobby.players
     });
+    
+    // Start auto-advance timer after timeout
+    startAutoAdvanceTimer(lobby, lobbyId);
 }
 
 // Start server
