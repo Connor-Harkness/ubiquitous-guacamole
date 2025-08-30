@@ -171,9 +171,6 @@ class TriviaGame {
             this.initializePlayerScores();
             this.showMultiplayerQuestion(data.question);
             this.showScreen('multiplayer-quiz-screen');
-            if (this.isHost) {
-                document.getElementById('mp-host-actions').style.display = 'block';
-            }
         });
 
         this.socket.on('nextQuestion', (data) => {
@@ -205,9 +202,7 @@ class TriviaGame {
 
         this.socket.on('allPlayersAnswered', () => {
             this.clearTimer();
-            if (this.isHost) {
-                document.getElementById('mp-next-btn').disabled = false;
-            }
+            // All players answered - server will handle auto-advance
         });
 
         this.socket.on('autoAdvanceUpdate', (data) => {
@@ -259,10 +254,6 @@ class TriviaGame {
         document.getElementById('mp-select-all-categories').addEventListener('change', (e) => {
             this.handleMultiplayerSelectAllCategories(e.target.checked);
         });
-        
-        // Quiz screen events
-        document.getElementById('next-btn').addEventListener('click', () => this.nextQuestion());
-        document.getElementById('mp-next-btn').addEventListener('click', () => this.nextMultiplayerQuestion());
         
         // Results screen events
         document.getElementById('play-again-btn').addEventListener('click', () => this.playAgain());
@@ -519,9 +510,6 @@ class TriviaGame {
         
         // Reset state
         this.selectedAnswerIndex = null;
-        if (this.isHost) {
-            document.getElementById('mp-next-btn').disabled = true;
-        }
         
         // Clear player answers display
         document.getElementById('player-answers').innerHTML = '';
@@ -720,15 +708,7 @@ class TriviaGame {
         timerElement.textContent = 'Time\'s up!';
         timerElement.classList.add('danger');
         
-        // Enable next button for host if all players have answered/timed out
-        if (this.isHost) {
-            document.getElementById('mp-next-btn').disabled = false;
-        }
-    }
-
-    nextMultiplayerQuestion() {
-        if (!this.isHost) return;
-        this.socket.emit('nextQuestion');
+        // Server will handle auto-advance for multiplayer timeouts
     }
 
     showMultiplayerResults() {
@@ -1018,7 +998,6 @@ class TriviaGame {
         
         // Reset state
         this.selectedAnswerIndex = null;
-        document.getElementById('next-btn').disabled = true;
         
         // Start timer
         this.startTimer(question.difficulty);
@@ -1118,10 +1097,7 @@ class TriviaGame {
             // Send timeout to server
             this.socket.emit('submitAnswer', { answerIndex: -1, isCorrect: false });
             
-            // Enable next button for host
-            if (this.isHost) {
-                document.getElementById('mp-next-btn').disabled = false;
-            }
+            // Server will handle auto-advance for multiplayer
         } else {
             // Handle single player timeout
             const answerButtons = document.querySelectorAll('#answers .answer-btn');
