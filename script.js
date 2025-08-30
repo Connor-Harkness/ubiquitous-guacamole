@@ -508,14 +508,23 @@ class TriviaGame {
             answersContainer.appendChild(button);
         });
         
-        // Reset state
+        // Reset state completely
         this.selectedAnswerIndex = null;
         
-        // Clear player answers display
-        document.getElementById('player-answers').innerHTML = '';
+        // Clear player answers display and ensure it's ready for new question
+        const playerAnswersContainer = document.getElementById('player-answers');
+        playerAnswersContainer.innerHTML = '';
         
-        // Timer will be managed by server
+        // Reset timer display
         document.getElementById('mp-timer').textContent = '--';
+        
+        // Ensure all buttons are in clean state (remove any leftover classes and reset pointer events)
+        const answerButtons = document.querySelectorAll('#mp-answers .answer-btn');
+        answerButtons.forEach(button => {
+            button.classList.remove('correct', 'incorrect');
+            button.style.opacity = '';
+            button.style.pointerEvents = '';
+        });
     }
 
     selectMultiplayerAnswer(answerIndex) {
@@ -532,21 +541,13 @@ class TriviaGame {
         
         const isCorrect = answerIndex === question.correctIndex;
         
-        // Show answer feedback immediately for this player
+        // Disable buttons immediately to prevent double-clicking
         const answerButtons = document.querySelectorAll('#mp-answers .answer-btn');
-        answerButtons.forEach((button, index) => {
+        answerButtons.forEach(button => {
             button.style.pointerEvents = 'none';
-            
-            if (index === question.correctIndex) {
-                button.classList.add('correct');
-            } else if (index === answerIndex) {
-                button.classList.add('incorrect');
-            } else {
-                button.style.opacity = '0.5';
-            }
         });
         
-        // Send answer to server (server will handle score updates)
+        // Send answer to server (server will handle all styling updates via broadcast)
         this.socket.emit('submitAnswer', { answerIndex, isCorrect });
     }
 
@@ -567,6 +568,29 @@ class TriviaGame {
             statusDiv.className = `player-status ${isCorrect ? 'correct' : 'incorrect'}`;
             statusDiv.textContent = `${player.name}: ${isCorrect ? '✓' : '✗'}`;
             playerAnswers.appendChild(statusDiv);
+        }
+        
+        // Apply answer button styling only once when the first player answers
+        // Check if buttons are already styled (first answer)
+        if (this.currentQuestion) {
+            const answerButtons = document.querySelectorAll('#mp-answers .answer-btn');
+            const alreadyStyled = answerButtons[0] && (answerButtons[0].style.pointerEvents === 'none');
+            
+            if (!alreadyStyled) {
+                answerButtons.forEach((button, index) => {
+                    // Disable all buttons once someone answers
+                    button.style.pointerEvents = 'none';
+                    
+                    // Apply styling to show correct answer and selected answer
+                    if (index === this.currentQuestion.correctIndex) {
+                        button.classList.add('correct');
+                    } else if (index === answerIndex) {
+                        button.classList.add('incorrect');
+                    } else {
+                        button.style.opacity = '0.5';
+                    }
+                });
+            }
         }
     }
 
@@ -688,8 +712,8 @@ class TriviaGame {
         const question = this.currentQuestion;
         if (!question) return;
         
+        // Only disable buttons and show correct answer - let server drive the styling
         const answerButtons = document.querySelectorAll('#mp-answers .answer-btn');
-        
         answerButtons.forEach((button, index) => {
             button.style.pointerEvents = 'none';
             
