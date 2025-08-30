@@ -171,9 +171,6 @@ class TriviaGame {
             this.initializePlayerScores();
             this.showMultiplayerQuestion(data.question);
             this.showScreen('multiplayer-quiz-screen');
-            if (this.isHost) {
-                document.getElementById('mp-host-actions').style.display = 'block';
-            }
         });
 
         this.socket.on('nextQuestion', (data) => {
@@ -205,9 +202,7 @@ class TriviaGame {
 
         this.socket.on('allPlayersAnswered', () => {
             this.clearTimer();
-            if (this.isHost) {
-                document.getElementById('mp-next-btn').disabled = false;
-            }
+            // All players answered - server will handle auto-advance
         });
 
         this.socket.on('autoAdvanceUpdate', (data) => {
@@ -259,10 +254,6 @@ class TriviaGame {
         document.getElementById('mp-select-all-categories').addEventListener('change', (e) => {
             this.handleMultiplayerSelectAllCategories(e.target.checked);
         });
-        
-        // Quiz screen events
-        document.getElementById('next-btn').addEventListener('click', () => this.nextQuestion());
-        document.getElementById('mp-next-btn').addEventListener('click', () => this.nextMultiplayerQuestion());
         
         // Results screen events
         document.getElementById('play-again-btn').addEventListener('click', () => this.playAgain());
@@ -329,8 +320,8 @@ class TriviaGame {
         this.showScreen('loading-screen');
         
         // Get settings from form - check if single player or multiplayer mode
-            document.getElementById('sp-question-count');
-            document.getElementById('sp-difficulty');
+        const questionCountElement = document.getElementById('sp-question-count');
+        const difficultyElement = document.getElementById('sp-difficulty');
             
         this.gameSettings.amount = questionCountElement.value;
         this.gameSettings.difficulty = difficultyElement.value;
@@ -519,9 +510,6 @@ class TriviaGame {
         
         // Reset state
         this.selectedAnswerIndex = null;
-        if (this.isHost) {
-            document.getElementById('mp-next-btn').disabled = true;
-        }
         
         // Clear player answers display
         document.getElementById('player-answers').innerHTML = '';
@@ -633,6 +621,67 @@ class TriviaGame {
         }
     }
 
+    startSinglePlayerAutoAdvance() {
+        // Clear any existing auto-advance timer
+        if (this.singlePlayerAutoAdvanceTimer) {
+            clearInterval(this.singlePlayerAutoAdvanceTimer);
+        }
+        
+        // Set 3-second countdown for single-player auto-advance
+        let timeLeft = 3;
+        
+        // Create or update auto-advance display
+        this.updateSinglePlayerAutoAdvanceDisplay(timeLeft);
+        
+        // Start countdown
+        this.singlePlayerAutoAdvanceTimer = setInterval(() => {
+            timeLeft--;
+            this.updateSinglePlayerAutoAdvanceDisplay(timeLeft);
+            
+            if (timeLeft <= 0) {
+                // Auto-advance to next question
+                clearInterval(this.singlePlayerAutoAdvanceTimer);
+                this.clearSinglePlayerAutoAdvanceDisplay();
+                this.nextQuestion();
+            }
+        }, 1000);
+    }
+
+    updateSinglePlayerAutoAdvanceDisplay(timeLeft) {
+        // Find or create auto-advance display element for single-player
+        let autoAdvanceElement = document.getElementById('sp-auto-advance');
+        if (!autoAdvanceElement) {
+            // Create the auto-advance display element if it doesn't exist
+            autoAdvanceElement = document.createElement('div');
+            autoAdvanceElement.id = 'sp-auto-advance';
+            autoAdvanceElement.className = 'auto-advance-display';
+            
+            // Insert it after the answers section in single-player
+            const answersSection = document.getElementById('answers');
+            if (answersSection) {
+                answersSection.parentNode.insertBefore(autoAdvanceElement, answersSection.nextSibling);
+            }
+        }
+        
+        autoAdvanceElement.textContent = `Next question in ${timeLeft} seconds...`;
+        autoAdvanceElement.style.display = 'block';
+        
+        // Add visual styling based on time left
+        autoAdvanceElement.classList.remove('warning', 'danger');
+        if (timeLeft <= 1) {
+            autoAdvanceElement.classList.add('danger');
+        } else if (timeLeft <= 2) {
+            autoAdvanceElement.classList.add('warning');
+        }
+    }
+
+    clearSinglePlayerAutoAdvanceDisplay() {
+        const autoAdvanceElement = document.getElementById('sp-auto-advance');
+        if (autoAdvanceElement) {
+            autoAdvanceElement.style.display = 'none';
+        }
+    }
+
     handleMultiplayerTimeout() {
         if (this.selectedAnswerIndex !== null) return; // Already answered
         
@@ -659,15 +708,7 @@ class TriviaGame {
         timerElement.textContent = 'Time\'s up!';
         timerElement.classList.add('danger');
         
-        // Enable next button for host if all players have answered/timed out
-        if (this.isHost) {
-            document.getElementById('mp-next-btn').disabled = false;
-        }
-    }
-
-    nextMultiplayerQuestion() {
-        if (!this.isHost) return;
-        this.socket.emit('nextQuestion');
+        // Server will handle auto-advance for multiplayer timeouts
     }
 
     showMultiplayerResults() {
@@ -924,8 +965,9 @@ class TriviaGame {
     showQuestion() {
         const question = this.questions[this.currentQuestionIndex];
         
-        // Clear any existing timer
+        // Clear any existing timer and auto-advance display
         this.clearTimer();
+        this.clearSinglePlayerAutoAdvanceDisplay();
         
         // Update progress
         const progress = ((this.currentQuestionIndex + 1) / this.totalQuestions) * 100;
@@ -956,7 +998,6 @@ class TriviaGame {
         
         // Reset state
         this.selectedAnswerIndex = null;
-        document.getElementById('next-btn').disabled = true;
         
         // Start timer
         this.startTimer(question.difficulty);
@@ -990,8 +1031,8 @@ class TriviaGame {
             this.score++;
         }
         
-        // Enable next button
-        document.getElementById('next-btn').disabled = false;
+        // Start auto-advance timer for single-player mode
+        this.startSinglePlayerAutoAdvance();
     }
 
     startTimer(difficulty, timerElementId = 'timer') {
@@ -1056,10 +1097,7 @@ class TriviaGame {
             // Send timeout to server
             this.socket.emit('submitAnswer', { answerIndex: -1, isCorrect: false });
             
-            // Enable next button for host
-            if (this.isHost) {
-                document.getElementById('mp-next-btn').disabled = false;
-            }
+            // Server will handle auto-advance for multiplayer
         } else {
             // Handle single player timeout
             const answerButtons = document.querySelectorAll('#answers .answer-btn');
@@ -1074,8 +1112,8 @@ class TriviaGame {
                 }
             });
             
-            // Enable next button
-            document.getElementById('next-btn').disabled = false;
+            // Start auto-advance timer for single-player mode
+            this.startSinglePlayerAutoAdvance();
         }
         
         // Mark as timeout (no score increase)
