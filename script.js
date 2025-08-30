@@ -633,6 +633,67 @@ class TriviaGame {
         }
     }
 
+    startSinglePlayerAutoAdvance() {
+        // Clear any existing auto-advance timer
+        if (this.singlePlayerAutoAdvanceTimer) {
+            clearInterval(this.singlePlayerAutoAdvanceTimer);
+        }
+        
+        // Set 3-second countdown for single-player auto-advance
+        let timeLeft = 3;
+        
+        // Create or update auto-advance display
+        this.updateSinglePlayerAutoAdvanceDisplay(timeLeft);
+        
+        // Start countdown
+        this.singlePlayerAutoAdvanceTimer = setInterval(() => {
+            timeLeft--;
+            this.updateSinglePlayerAutoAdvanceDisplay(timeLeft);
+            
+            if (timeLeft <= 0) {
+                // Auto-advance to next question
+                clearInterval(this.singlePlayerAutoAdvanceTimer);
+                this.clearSinglePlayerAutoAdvanceDisplay();
+                this.nextQuestion();
+            }
+        }, 1000);
+    }
+
+    updateSinglePlayerAutoAdvanceDisplay(timeLeft) {
+        // Find or create auto-advance display element for single-player
+        let autoAdvanceElement = document.getElementById('sp-auto-advance');
+        if (!autoAdvanceElement) {
+            // Create the auto-advance display element if it doesn't exist
+            autoAdvanceElement = document.createElement('div');
+            autoAdvanceElement.id = 'sp-auto-advance';
+            autoAdvanceElement.className = 'auto-advance-display';
+            
+            // Insert it after the answers section in single-player
+            const answersSection = document.getElementById('answers');
+            if (answersSection) {
+                answersSection.parentNode.insertBefore(autoAdvanceElement, answersSection.nextSibling);
+            }
+        }
+        
+        autoAdvanceElement.textContent = `Next question in ${timeLeft} seconds...`;
+        autoAdvanceElement.style.display = 'block';
+        
+        // Add visual styling based on time left
+        autoAdvanceElement.classList.remove('warning', 'danger');
+        if (timeLeft <= 1) {
+            autoAdvanceElement.classList.add('danger');
+        } else if (timeLeft <= 2) {
+            autoAdvanceElement.classList.add('warning');
+        }
+    }
+
+    clearSinglePlayerAutoAdvanceDisplay() {
+        const autoAdvanceElement = document.getElementById('sp-auto-advance');
+        if (autoAdvanceElement) {
+            autoAdvanceElement.style.display = 'none';
+        }
+    }
+
     handleMultiplayerTimeout() {
         if (this.selectedAnswerIndex !== null) return; // Already answered
         
@@ -924,8 +985,9 @@ class TriviaGame {
     showQuestion() {
         const question = this.questions[this.currentQuestionIndex];
         
-        // Clear any existing timer
+        // Clear any existing timer and auto-advance display
         this.clearTimer();
+        this.clearSinglePlayerAutoAdvanceDisplay();
         
         // Update progress
         const progress = ((this.currentQuestionIndex + 1) / this.totalQuestions) * 100;
@@ -990,8 +1052,8 @@ class TriviaGame {
             this.score++;
         }
         
-        // Enable next button
-        document.getElementById('next-btn').disabled = false;
+        // Start auto-advance timer for single-player mode
+        this.startSinglePlayerAutoAdvance();
     }
 
     startTimer(difficulty, timerElementId = 'timer') {
@@ -1074,8 +1136,8 @@ class TriviaGame {
                 }
             });
             
-            // Enable next button
-            document.getElementById('next-btn').disabled = false;
+            // Start auto-advance timer for single-player mode
+            this.startSinglePlayerAutoAdvance();
         }
         
         // Mark as timeout (no score increase)
